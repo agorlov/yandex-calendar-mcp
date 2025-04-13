@@ -1,6 +1,33 @@
 #!/usr/bin/env python3
 # encoding: utf-8
 
+"""
+MCP-сервер для Яндекс Календаря
+
+Этот модуль реализует MCP-сервер (Model Context Protocol), 
+предоставляющий Claude доступ к Яндекс Календарю. Основные возможности:
+
+1. Получение предстоящих событий из календаря (get_upcoming_events)
+2. Создание новых событий в календаре (create_calendar_event)
+3. Удаление событий по их идентификатору (delete_calendar_event)
+
+Сервер использует библиотеку FastMCP для организации взаимодействия
+с Claude через Model Context Protocol.
+
+Для работы требуется:
+- Учетные данные Яндекс (логин/пароль приложения)
+- Правильно настроенный .env файл
+- Установленные зависимости (mcp, httpx, caldav, python-dotenv)
+
+Запуск:
+    python main.py
+    или
+    mcp install main.py --name "Яндекс Календарь"
+
+Автор: Alexander Gorlov
+Лицензия: MIT
+"""
+
 import os
 import json
 import datetime

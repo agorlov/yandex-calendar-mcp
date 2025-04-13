@@ -1,3 +1,40 @@
+"""
+Класс для работы с Яндекс Календарем через CalDAV
+
+Этот модуль предоставляет интерфейс для взаимодействия с Яндекс Календарем 
+через протокол CalDAV. Он реализует:
+
+1. Подключение к календарю с использованием учетных данных Яндекс
+2. Создание новых событий в календаре
+3. Получение списка предстоящих событий в текстовом или JSON формате
+4. Удаление событий по их уникальному идентификатору (UID)
+5. Парсинг и форматирование данных iCal
+
+Требования:
+- Учетная запись Яндекс
+- Пароль приложения (создается на странице https://id.yandex.ru/security/app-passwords)
+- Установленные зависимости (caldav, bs4, httpx)
+
+Пример использования:
+    calendar = YandexCalendarEvents(
+        caldav_url="https://caldav.yandex.ru",
+        username="your_email@yandex.ru",
+        password="app_password"
+    )
+    
+    # Получение событий
+    events = await calendar.get_upcoming_events(days=7, format_type="json")
+    
+    # Создание события
+    result = await calendar.create_event("Встреча", start, end, "Описание")
+    
+    # Удаление события
+    result = await calendar.delete_event("event_uid")
+
+Автор: Alexander Gorlov
+Лицензия: MIT
+"""
+
 import httpx
 import re
 import json
