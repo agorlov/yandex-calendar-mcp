@@ -1,7 +1,25 @@
+"""
+Интеграционный тест основных функций Яндекс Календаря
+
+Этот тест проверяет полный цикл операций с календарем:
+1. Подключение к Яндекс Календарю
+2. Создание тестового события на завтра
+3. Поиск созданного события
+4. Удаление тестового события
+5. Проверка успешности удаления
+
+Тест дает общее представление о работоспособности всего MCP-сервера.
+"""
+
 import asyncio
 import datetime
 import os
+import sys
 from dotenv import load_dotenv
+
+# Добавляем корневую директорию проекта в путь поиска модулей
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from yandex_calendar_events2 import YandexCalendarEvents
 
 async def main():
