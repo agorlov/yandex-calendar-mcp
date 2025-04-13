@@ -28,7 +28,7 @@ calendar_event = YandexCalendarEvents(
 )
 
 @mcp.tool()
-async def get_upcoming_events(days: int = 90, format_type: str = "text", ctx: Context = None) -> str:
+async def get_upcoming_events(days: int = 90, format_type: str = "json", ctx: Context = None) -> str:
     """
     Получить предстоящие события из Яндекс Календаря.
 
@@ -36,14 +36,14 @@ async def get_upcoming_events(days: int = 90, format_type: str = "text", ctx: Co
         days (int): Количество дней для просмотра предстоящих событий. 
                     По умолчанию: 90.
         format_type (str): Формат вывода: "text" или "json".
-                    По умолчанию: "text".
+                    По умолчанию: "json".
         ctx (Context): Контекст MCP, предоставляемый автоматически.
 
     Returns:
         str: Форматированный текст или JSON с предстоящими событиями, или сообщение об ошибке.
     """
     if ctx:
-        ctx.info(f"Получение предстоящих событий за {days} дней")
+        ctx.info(f"Получение предстоящих событий за {days} дней в формате {format_type}")
     
     if not calendar_event.caldav_calendar:
         error_msg = "Ошибка: не удалось подключиться к Яндекс Календарю. Проверьте учетные данные."
@@ -51,43 +51,21 @@ async def get_upcoming_events(days: int = 90, format_type: str = "text", ctx: Co
             ctx.error(error_msg)
         return error_msg
     
-    events_text = await calendar_event.get_upcoming_events(days)
-    
-    # Если запрошен JSON формат, попробуем преобразовать текстовый вывод в JSON
-    if format_type.lower() == "json" and events_text != "Нет предстоящих событий" and not events_text.startswith("Ошибка"):
-        try:
-            events_list = []
-            # Разделяем события (каждое событие начинается с эмодзи календаря)
-            raw_events = events_text.split("📅 ")
+    try:
+        events_result = await calendar_event.get_upcoming_events(days, format_type)
+        
+        # Если результат уже строка, то возвращаем его
+        if isinstance(events_result, str):
+            return events_result
             
-            for raw_event in raw_events:
-                if not raw_event.strip():
-                    continue
-                    
-                event_data = {}
-                lines = raw_event.strip().split("\n")
-                
-                # Первая строка - название события
-                event_data["title"] = lines[0].strip()
-                
-                for line in lines[1:]:
-                    line = line.strip()
-                    if line.startswith("Начало:"):
-                        event_data["start"] = line.replace("Начало:", "").strip()
-                    elif line.startswith("Окончание:"):
-                        event_data["end"] = line.replace("Окончание:", "").strip()
-                    elif line.startswith("Описание:"):
-                        event_data["description"] = line.replace("Описание:", "").strip()
-                
-                events_list.append(event_data)
-            
-            return json.dumps({"events": events_list}, ensure_ascii=False, indent=2)
-        except Exception as e:
-            if ctx:
-                ctx.error(f"Ошибка при преобразовании в JSON: {str(e)}")
-            return events_text
-    
-    return events_text
+        # Если результат - словарь, то преобразуем его в JSON строку
+        return json.dumps(events_result, ensure_ascii=False, indent=2)
+        
+    except Exception as e:
+        error_msg = f"Ошибка при получении событий: {str(e)}"
+        if ctx:
+            ctx.error(error_msg)
+        return error_msg
 
 
 @mcp.tool()
@@ -150,6 +128,45 @@ async def create_calendar_event(
         
     except Exception as e:
         error_msg = f"Ошибка при создании события: {str(e)}"
+        if ctx:
+            ctx.error(error_msg)
+        return error_msg
+
+
+@mcp.tool()
+async def delete_calendar_event(event_uid: str, ctx: Context = None) -> str:
+    """
+    Удалить событие из Яндекс Календаря по его уникальному идентификатору.
+
+    Args:
+        event_uid (str): Уникальный идентификатор события (uid).
+        ctx (Context): Контекст MCP, предоставляемый автоматически.
+
+    Returns:
+        str: Сообщение о результате удаления события.
+    """
+    if ctx:
+        ctx.info(f"Попытка удаления события с ID: {event_uid}")
+    
+    if not calendar_event.caldav_calendar:
+        error_msg = "Ошибка: не удалось подключиться к Яндекс Календарю. Проверьте учетные данные."
+        if ctx:
+            ctx.error(error_msg)
+        return error_msg
+    
+    try:
+        result = await calendar_event.delete_event(event_uid)
+        
+        if ctx:
+            if "успешно" in result:
+                ctx.info(result)
+            else:
+                ctx.error(result)
+        
+        return result
+        
+    except Exception as e:
+        error_msg = f"Ошибка при удалении события: {str(e)}"
         if ctx:
             ctx.error(error_msg)
         return error_msg

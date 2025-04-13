@@ -1,7 +1,8 @@
 import httpx
 import re
+import json
 import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple, Union
 from bs4 import BeautifulSoup
 import caldav
 from caldav.elements import dav
@@ -44,16 +45,97 @@ class YandexCalendarEvents:
             self.caldav_client = None
             self.caldav_calendar = None
 
-
+    def _parse_ical_event(self, event_data: str) -> Dict[str, Any]:
+        """
+        Парсинг iCal данных события
+        
+        Args:
+            event_data (str): Сырые данные события в формате iCal
+            
+        Returns:
+            Dict[str, Any]: Словарь с данными события
+        """
+        event_dict = {}
+        event_lines = event_data.split('\n')
+        
+        # Общие поля, которые мы хотим извлечь
+        for line in event_lines:
+            line = line.strip()
+            if line.startswith('SUMMARY:'):
+                event_dict['title'] = line.replace('SUMMARY:', '')
+            elif line.startswith('DESCRIPTION:'):
+                event_dict['description'] = line.replace('DESCRIPTION:', '')
+            elif line.startswith('LOCATION:'):
+                event_dict['location'] = line.replace('LOCATION:', '')
+            elif line.startswith('UID:'):
+                event_dict['uid'] = line.replace('UID:', '')
+            elif line.startswith('DTSTART'):
+                try:
+                    date_str = line.split(':')[1]
+                    # Преобразуем дату из формата YYYYMMDDTHHMMSS
+                    dt = datetime.datetime.strptime(date_str[:15], '%Y%m%dT%H%M%S')
+                    event_dict['start_time'] = dt.isoformat()
+                    event_dict['start_display'] = dt.strftime('%d.%m.%Y %H:%M')
+                except Exception:
+                    # Если формат даты другой, пропускаем
+                    pass
+            elif line.startswith('DTEND'):
+                try:
+                    date_str = line.split(':')[1]
+                    dt = datetime.datetime.strptime(date_str[:15], '%Y%m%dT%H%M%S')
+                    event_dict['end_time'] = dt.isoformat()
+                    event_dict['end_display'] = dt.strftime('%d.%m.%Y %H:%M')
+                except Exception:
+                    # Если формат даты другой, пропускаем
+                    pass
+            elif line.startswith('CREATED'):
+                try:
+                    date_str = line.split(':')[1]
+                    dt = datetime.datetime.strptime(date_str[:15], '%Y%m%dT%H%M%S')
+                    event_dict['created'] = dt.isoformat()
+                except Exception:
+                    # Если формат даты другой, пропускаем
+                    pass
+            elif line.startswith('LAST-MODIFIED'):
+                try:
+                    date_str = line.split(':')[1]
+                    dt = datetime.datetime.strptime(date_str[:15], '%Y%m%dT%H%M%S')
+                    event_dict['last_modified'] = dt.isoformat()
+                except Exception:
+                    # Если формат даты другой, пропускаем
+                    pass
+            elif line.startswith('CATEGORIES:'):
+                event_dict['categories'] = line.replace('CATEGORIES:', '').split(',')
+            elif line.startswith('STATUS:'):
+                event_dict['status'] = line.replace('STATUS:', '')
+            elif line.startswith('TRANSP:'):
+                event_dict['transparency'] = line.replace('TRANSP:', '')
+            elif line.startswith('SEQUENCE:'):
+                try:
+                    event_dict['sequence'] = int(line.replace('SEQUENCE:', ''))
+                except ValueError:
+                    pass
+                
+        return event_dict
 
     async def create_event(self, title: str, start: datetime.datetime, 
                            end: datetime.datetime, description: str = "") -> str:
         """
         Создать новое событие через CalDAV
+        
+        Args:
+            title (str): Название события
+            start (datetime.datetime): Дата и время начала события
+            end (datetime.datetime): Дата и время окончания события
+            description (str, optional): Описание события. По умолчанию: ""
+            
+        Returns:
+            str: Сообщение о результате создания события
         """
         if not self.caldav_calendar:
             return "CalDAV не настроен"
             
+        event_uid = f"{datetime.datetime.now().timestamp()}@yandex.ru"
         ical = f"""BEGIN:VCALENDAR
 VERSION:2.0
 BEGIN:VEVENT
@@ -61,7 +143,7 @@ DTSTART:{start.strftime('%Y%m%dT%H%M%S')}
 DTEND:{end.strftime('%Y%m%dT%H%M%S')}
 SUMMARY:{title}
 DESCRIPTION:{description}
-UID:{datetime.datetime.now().timestamp()}@yandex.ru
+UID:{event_uid}
 END:VEVENT
 END:VCALENDAR"""
 
@@ -74,6 +156,12 @@ END:VCALENDAR"""
     async def delete_event(self, event_uid: str) -> str:
         """
         Удалить событие по UID
+        
+        Args:
+            event_uid (str): Уникальный идентификатор события для удаления
+            
+        Returns:
+            str: Сообщение о результате удаления события
         """
         if not self.caldav_calendar:
             return "CalDAV не настроен"
@@ -83,20 +171,21 @@ END:VCALENDAR"""
             event = self.caldav_calendar.object_by_uid(event_uid)
             if event:
                 event.delete()
-                return f"Событие {event_uid} удалено"
+                return f"Событие {event_uid} успешно удалено"
             return "Событие не найдено"
         except Exception as e:
             return f"Ошибка удаления: {str(e)}"
 
-    async def get_upcoming_events(self, days: int = 90) -> str:
+    async def get_upcoming_events(self, days: int = 90, format_type: str = "json") -> Union[str, Dict[str, Any]]:
         """
         Получить предстоящие события из календаря
         
         Args:
-            days (int): Количество дней для просмотра предстоящих событий
+            days (int): Количество дней для просмотра предстоящих событий. По умолчанию: 90.
+            format_type (str): Формат вывода: "text" или "json". По умолчанию: "json".
             
         Returns:
-            str: Форматированный текст со списком событий или сообщение об ошибке
+            Union[str, Dict[str, Any]]: Форматированный текст или JSON со списком событий, или сообщение об ошибке
         """
         if not self.caldav_calendar:
             return "CalDAV не настроен"
@@ -113,43 +202,57 @@ END:VCALENDAR"""
             )
             
             if not events:
+                if format_type.lower() == "json":
+                    return {"events": [], "count": 0}
                 return "Нет предстоящих событий"
             
-            # Форматируем вывод событий
-            result = []
-            for event in events:
-                event_data = event.data
-                event_lines = event_data.split('\n')
-                
-                # Извлекаем основные данные события
-                summary = None
-                start_date = None
-                end_date = None
-                description = None
-                
-                for line in event_lines:
-                    if line.startswith('SUMMARY:'):
-                        summary = line.replace('SUMMARY:', '')
-                    elif line.startswith('DTSTART'):
-                        date_str = line.split(':')[1]
-                        # Преобразуем дату из формата YYYYMMDDTHHMMSS
-                        start_date = datetime.datetime.strptime(date_str[:15], '%Y%m%dT%H%M%S')
-                    elif line.startswith('DTEND'):
-                        date_str = line.split(':')[1]
-                        end_date = datetime.datetime.strptime(date_str[:15], '%Y%m%dT%H%M%S')
-                    elif line.startswith('DESCRIPTION:'):
-                        description = line.replace('DESCRIPTION:', '')
-                
-                if summary and start_date:
-                    event_str = f"📅 {summary}\n"
-                    event_str += f"   Начало: {start_date.strftime('%d.%m.%Y %H:%M')}\n"
-                    if end_date:
-                        event_str += f"   Окончание: {end_date.strftime('%d.%m.%Y %H:%M')}\n"
-                    if description:
-                        event_str += f"   Описание: {description}\n"
-                    result.append(event_str)
+            # Список для хранения данных событий
+            events_data = []
             
-            return "\n".join(result) if result else "Нет предстоящих событий"
+            for event in events:
+                try:
+                    # Получить полные данные события
+                    event_data = self._parse_ical_event(event.data)
+                    
+                    # Получаем URL события (для обновления/удаления) - преобразуем в строку
+                    event_data["url"] = str(event.url)
+                    
+                    events_data.append(event_data)
+                except Exception as e:
+                    print(f"Ошибка при обработке события: {str(e)}")
+                    continue
+            
+            # Сортируем события по дате начала
+            events_data.sort(key=lambda x: x.get('start_time', ''))
+            
+            if format_type.lower() == "json":
+                return {
+                    "events": events_data,
+                    "count": len(events_data)
+                }
+            else:
+                # Формируем текстовый вывод
+                result = []
+                for event in events_data:
+                    event_str = f"📅 {event.get('title', 'Без названия')}\n"
+                    event_str += f"   ID: {event.get('uid', 'Нет ID')}\n"
+                    event_str += f"   Начало: {event.get('start_display', 'Не указано')}\n"
+                    
+                    if 'end_display' in event:
+                        event_str += f"   Окончание: {event['end_display']}\n"
+                    
+                    if 'description' in event and event['description']:
+                        event_str += f"   Описание: {event['description']}\n"
+                    
+                    if 'location' in event and event['location']:
+                        event_str += f"   Место: {event['location']}\n"
+                    
+                    result.append(event_str)
+                
+                return "\n".join(result) if result else "Нет предстоящих событий"
             
         except Exception as e:
-            return f"Ошибка при получении событий: {str(e)}"
+            error_msg = f"Ошибка при получении событий: {str(e)}"
+            if format_type.lower() == "json":
+                return {"error": error_msg}
+            return error_msg
