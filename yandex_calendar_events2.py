@@ -21,6 +21,7 @@ class YandexCalendarEvents:
     def _init_caldav(self):
         """Инициализация CalDAV клиента"""
         try:
+            # Создаем клиента с учетными данными
             self.caldav_client = caldav.DAVClient(
                 url=self.caldav_url,
                 username=self.username,
@@ -147,8 +148,15 @@ UID:{event_uid}
 END:VEVENT
 END:VCALENDAR"""
 
+        # Используем блок asyncio для выполнения синхронной операции в асинхронном контексте
+        import asyncio
         try:
-            self.caldav_calendar.add_event(ical)
+            # Выполняем синхронную операцию в отдельном потоке
+            # чтобы не блокировать основной поток выполнения
+            def _add_event():
+                return self.caldav_calendar.add_event(ical)
+                
+            await asyncio.to_thread(_add_event)
             return f"Событие '{title}' успешно создано"
         except Exception as e:
             return f"Ошибка создания события: {str(e)}"
@@ -165,14 +173,19 @@ END:VCALENDAR"""
         """
         if not self.caldav_calendar:
             return "CalDAV не настроен"
-            
+        
+        import asyncio  
         try:
-            # Получаем событие напрямую по UID
-            event = self.caldav_calendar.object_by_uid(event_uid)
-            if event:
-                event.delete()
-                return f"Событие {event_uid} успешно удалено"
-            return "Событие не найдено"
+            # Выполняем синхронные операции CalDAV в отдельном потоке
+            def _delete_event():
+                event = self.caldav_calendar.object_by_uid(event_uid)
+                if event:
+                    event.delete()
+                    return f"Событие {event_uid} успешно удалено"
+                return "Событие не найдено"
+                
+            result = await asyncio.to_thread(_delete_event)
+            return result
         except Exception as e:
             return f"Ошибка удаления: {str(e)}"
 
@@ -189,38 +202,49 @@ END:VCALENDAR"""
         """
         if not self.caldav_calendar:
             return "CalDAV не настроен"
-            
+        
+        import asyncio    
         try:
             # Вычисляем даты начала и конца периода
             start = datetime.datetime.now()
             end = start + datetime.timedelta(days=days)
             
-            # Получаем события за указанный период
-            events = self.caldav_calendar.date_search(
-                start=start,
-                end=end
-            )
+            # Выполняем синхронные операции в отдельном потоке
+            def _get_events():
+                # Получаем события за указанный период
+                events = self.caldav_calendar.date_search(
+                    start=start,
+                    end=end
+                )
+                
+                if not events:
+                    return []
+                
+                # Список для хранения данных событий
+                events_data = []
+                
+                for event in events:
+                    try:
+                        # Получить полные данные события
+                        event_data = self._parse_ical_event(event.data)
+                        
+                        # Получаем URL события (для обновления/удаления) - преобразуем в строку
+                        event_data["url"] = str(event.url)
+                        
+                        events_data.append(event_data)
+                    except Exception as e:
+                        print(f"Ошибка при обработке события: {str(e)}")
+                        continue
+                
+                return events_data
             
-            if not events:
+            # Выполняем в отдельном потоке, чтобы не блокировать асинхронный контекст
+            events_data = await asyncio.to_thread(_get_events)
+            
+            if not events_data:
                 if format_type.lower() == "json":
                     return {"events": [], "count": 0}
                 return "Нет предстоящих событий"
-            
-            # Список для хранения данных событий
-            events_data = []
-            
-            for event in events:
-                try:
-                    # Получить полные данные события
-                    event_data = self._parse_ical_event(event.data)
-                    
-                    # Получаем URL события (для обновления/удаления) - преобразуем в строку
-                    event_data["url"] = str(event.url)
-                    
-                    events_data.append(event_data)
-                except Exception as e:
-                    print(f"Ошибка при обработке события: {str(e)}")
-                    continue
             
             # Сортируем события по дате начала
             events_data.sort(key=lambda x: x.get('start_time', ''))

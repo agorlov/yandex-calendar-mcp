@@ -43,12 +43,12 @@ async def get_upcoming_events(days: int = 90, format_type: str = "json", ctx: Co
         str: Форматированный текст или JSON с предстоящими событиями, или сообщение об ошибке.
     """
     if ctx:
-        ctx.info(f"Получение предстоящих событий за {days} дней в формате {format_type}")
+        await ctx.info(f"Получение предстоящих событий за {days} дней в формате {format_type}")
     
     if not calendar_event.caldav_calendar:
         error_msg = "Ошибка: не удалось подключиться к Яндекс Календарю. Проверьте учетные данные."
         if ctx:
-            ctx.error(error_msg)
+            await ctx.error(error_msg)
         return error_msg
     
     try:
@@ -92,7 +92,7 @@ async def create_calendar_event(
         str: Сообщение о результате создания события.
     """
     if ctx:
-        ctx.info(f"Попытка создания события: {title} на {start_date} {start_time}")
+        await ctx.info(f"Попытка создания события: {title} на {start_date} {start_time}")
     
     if not calendar_event.caldav_calendar:
         error_msg = "Ошибка: не удалось подключиться к Яндекс Календарю. Проверьте учетные данные."
@@ -112,7 +112,7 @@ async def create_calendar_event(
         except ValueError as e:
             error_msg = f"Ошибка формата даты или времени: {str(e)}. Используйте формат ДД.ММ.ГГГГ для даты и ЧЧ:ММ для времени."
             if ctx:
-                ctx.error(error_msg)
+                await ctx.error(error_msg)
             return error_msg
         
         # Создание события
@@ -120,16 +120,16 @@ async def create_calendar_event(
         
         if ctx:
             if "успешно" in result:
-                ctx.info(result)
+                await ctx.info(result)
             else:
-                ctx.error(result)
+                await ctx.error(result)
         
         return result
         
     except Exception as e:
         error_msg = f"Ошибка при создании события: {str(e)}"
         if ctx:
-            ctx.error(error_msg)
+            await ctx.error(error_msg)
         return error_msg
 
 
@@ -146,7 +146,7 @@ async def delete_calendar_event(event_uid: str, ctx: Context = None) -> str:
         str: Сообщение о результате удаления события.
     """
     if ctx:
-        ctx.info(f"Попытка удаления события с ID: {event_uid}")
+        await ctx.info(f"Попытка удаления события с ID: {event_uid}")
     
     if not calendar_event.caldav_calendar:
         error_msg = "Ошибка: не удалось подключиться к Яндекс Календарю. Проверьте учетные данные."
@@ -159,16 +159,16 @@ async def delete_calendar_event(event_uid: str, ctx: Context = None) -> str:
         
         if ctx:
             if "успешно" in result:
-                ctx.info(result)
+                await ctx.info(result)
             else:
-                ctx.error(result)
+                await ctx.error(result)
         
         return result
         
     except Exception as e:
         error_msg = f"Ошибка при удалении события: {str(e)}"
         if ctx:
-            ctx.error(error_msg)
+            await ctx.error(error_msg)
         return error_msg
 
 if __name__ == "__main__":
