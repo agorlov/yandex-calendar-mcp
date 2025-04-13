@@ -1,11 +1,21 @@
 import asyncio
 import datetime
+import os
+from dotenv import load_dotenv
 from yandex_calendar_events2 import YandexCalendarEvents
 
 async def main():
-    CALDAV_BASE_URL = "https://caldav.yandex.ru"
-    USERNAME = "alexgorlov@yandex.ru"
-    PASSWORD = "cjrtixyphmhwzdxe"
+    # Загрузка переменных окружения из файла .env
+    load_dotenv()
+    
+    # Получение учетных данных из переменных окружения
+    CALDAV_BASE_URL = os.getenv("YANDEX_CALDAV_URL", "https://caldav.yandex.ru")
+    USERNAME = os.getenv("YANDEX_USERNAME")
+    PASSWORD = os.getenv("YANDEX_PASSWORD")
+    
+    if not USERNAME or not PASSWORD:
+        print("Ошибка: Учетные данные не найдены. Проверьте переменные окружения YANDEX_USERNAME и YANDEX_PASSWORD")
+        return
     
     calendar = YandexCalendarEvents(
         caldav_url=CALDAV_BASE_URL,
